@@ -1,4 +1,4 @@
-#!/bin/bash
+#!./ptbash
 
 ##### Estilos de texto #####
 
@@ -16,23 +16,52 @@ TIME_STAMP="Actualizada el $DATE por $USER" # Muestra la fecha, hora y usuario q
 
 READLIST=0
 READPROG=0
-g_option=false
-gc_option=false
-ge_option=false
+IS_G=false
+IS_GC=false
+IS_GE=false
 
 
 ##### Funciones #####
 
 # Función para mostrar el menú de ayuda. 
-usage() 
+USAGE() 
 {
   echo "Usage: ./scdebug.sh  [-h] [-sto arg] [-v | -vall] [-k] [prog [arg …] ] [-nattch progtoattach …] [-pattch pid1 … ]" 
 }
 
+# Función para mostrar el segundo menú de ayuda. Este menú se muestra cuando 
+# se cambia la bash a modo attach.
+USAGE2() 
+{
+  echo "Usage: ./scdebug.sh [-h] [-k] -S commName prog [arg...]" 
+}
 # Función que se encarga de crear en segundo plano un proceso con el comando strace.
 STRACE(){
-
   strace $stovar $@ 2>&1 | tee -a scdebug/$1/trace_$uuid.txt  
+}
+
+# Función que se encarga de comprobar si existe la carpeta scdebug y scdebug/$1, así como 
+# qué procesos se están ejecutando.
+CHECK(){
+  if [ $# -ne 0 ]; then
+    echo "La función 'prog' fue llamada con argumentos: $@"
+  fi
+
+  if [ -d "scdebug" ]; then 
+    echo "La carpeta scdebug existe."
+  else
+    echo "La carpeta scdebug no existe."
+    echo "mkdir scdebug"
+    $(mkdir scdebug )
+  fi
+
+  if [ -d "scdebug/$1" ]; then 
+    echo "La carpeta $1 existe."
+  else
+    echo "La carpeta $1 no existe."
+    echo "mkdir scdebug/$1"
+    $(mkdir scdebug/$1 )
+  fi
 }
 
 # Función que se encarga de 
@@ -40,7 +69,7 @@ programa() {
   CHECK $1
 
   uuid=$(uuidgen)
-  echo "strace $stovar  -o scdebug/$1/trace_$uuid.txt $@" 
+  echo "strace $stovar -o scdebug/$1/trace_$uuid.txt $@" 
   STRACE $1 &
 }
 
@@ -102,181 +131,124 @@ KILL(){ # funciona en maquina ajena, pero no en la local
 
 }
 
-# Función que se encarga de comprobar si existe la carpeta scdebug y scdebug/$1, así como qué procesos se están ejecutando.
-CHECK(){
-  if [ $# -eq 0 ]; then
-    echo "La función 'prog' fue llamada sin argumentos."
-    exit 1
-  else
-      echo "La función 'prog' fue llamada con argumentos: $@"
-  fi
-
-  if [ -d "scdebug" ]; then # comprobar que la carpeta scdebug existe
-    echo "La carpeta scdebug existe."
-  else
-    echo "La carpeta scdebug no existe."
-    echo "mkdir scdebug"
-    $(mkdir scdebug )
-  fi
-
- if [ -d "scdebug/$1" ]; then # comprobar que la carpeta scdebug/$1 existe
-   echo "La carpeta $1 existe."
- else
-   echo "La carpeta $1 no existe."
-   echo "mkdir scdebug/$1"
-   $(mkdir scdebug/$1 )
- fi
-}
-
 ejecutable_pattch(){
   strace $stovar -p $1 -o scdebug/$1/trace_$uidd.txt | tee -a scdebug/$1/trace_$uidd.txt # ejecutar el comando
 }
 
+# 
 PATTCH(){
   CHECK $1
   uuid=$(uuidgen)
-  #$(strace $stovar -p $1 -o scdebug/$1/trace_$uuid.txt &)
   ejecutable_pattch $1 &
 }
 
+# Función que se encarga de mostrar el último archivo de traza de un proceso. Comprueba la existencia 
+# de la carpeta scdebug/, que la carpeta con el nombre del comando exista y muestra el último archivo de traza.
 VISUALIZE(){
-  directorio="scdebug/$1"
+  DIRECTORY="scdebug/$1"
 
-
-  if [ -d "$directorio" ]; then
-    archivo_mas_reciente=$(ls -t "$directorio" | head -1)
+  if [ -d "$DIRECTORY" ]; then
+    LAST_FILE=$(ls -t "$DIRECTORY" | head -1)
     
-    if [ -n "$archivo_mas_reciente" ]; then
-      modi_date=$(stat -c %y "$directorio/$archivo_mas_reciente")
+    if [ -n "$LAST_FILE" ]; then
+      NEW_DATE=$(stat -c %y "$DIRECTORY/$LAST_FILE")
 
       echo "=============== ${TEXT_GREEN}COMMAND: $1 ${TEXT_RESET}============================================================="
-      echo "=============== ${TEXT_GREEN}TRACE FILE: $archivo_mas_reciente ${TEXT_RESET}================="
-      echo "=============== ${TEXT_GREEN}TIME: $modi_date ${TEXT_RESET}=================================="
+      echo "=============== ${TEXT_GREEN}TRACE FILE: $LAST_FILE ${TEXT_RESET}================="
+      echo "=============== ${TEXT_GREEN}TIME: $NEW_DATE ${TEXT_RESET}=================================="
 
-      cat "$directorio/$archivo_mas_reciente"
+      cat "$DIRECTORY/$LAST_FILE"
     else
       echo "${TEXT_RED}El directorio está vacío o no contiene archivos.${TEXT_RESET}"
     fi
   else
-    echo "${TEXT_RED}El directorio $directorio no existe.${TEXT_RESET}"
+    echo "${TEXT_RED}El directorio $DIRECTORY no existe.${TEXT_RESET}"
   fi
 }
 
+# Función que se encarga de mostrar todos los archivos de traza de un proceso. Comprueba la existencia
+# de la carpeta scdebug/, que la carpeta con el nombre del comando exista y muestra todos los archivos de traza.
+
 VALL(){
-  directorio="scdebug/$1"
-  for file in "$directorio"/*; do
-    if [ -f "$file" ]; then
-      modi_date=$(stat -c %y "$file")
+  DIRECTORY="scdebug/$1"
+
+  for FILE in "$DIRECTORY"/*; do
+    if [ -f "$FILE" ]; then
+      NEW_DATE=$(stat -c %y "$FILE")
       echo "=============== ${TEXT_GREEN}COMMAND: $1 ${TEXT_RESET}============================================================="
-      echo "=============== ${TEXT_GREEN}TRACE FILE: $file ${TEXT_RESET}==="
-      echo "=============== ${TEXT_GREEN}TIME: $modi_date ${TEXT_RESET}=================================="
+      echo "=============== ${TEXT_GREEN}TRACE FILE: $FILE ${TEXT_RESET}==="
+      echo "=============== ${TEXT_GREEN}TIME: $NEW_DATE ${TEXT_RESET}=================================="
 
     fi
   done
 }
 
+# Función que se encarga de parar la ejecución de un proceso que se está siguiendo con strace.
 STOP(){ 
   echo -n traced_$1 > /proc/$$/comm
-
-
-  #echo "kill -SIGSTOP $$"
   kill -SIGSTOP $$
-
-  # echo "exec $listaProg"
   exec $listaProg
 
 }
 
-##### pruebas de ejecucion
-check_uuidgen_availability() {
-    if command -v uuidgen &> /dev/null; then
-        echo "uuidgen está disponible en el sistema."
-    else
-        echo "uuidgen no está disponible en el sistema."
-        exit 1
-    fi
-}
-
-check_strace_availability() {
-    if command -v strace &> /dev/null; then
-        echo "strace está disponible en el sistema."
-    else
-        echo "strace no está disponible en el sistema."
-        exit 1
-    fi
-}
-
-llamada(){
-  #echo "llamada $1"
-  #echo "strace -p $1 -o scdebug/$1/trace_$uidd.txt | tee -a scdebug/$1/trace_$uidd.txt"
+# Proceso hijo que se llama en la función G, para así poder ejecutar el comando strace en segundo plano.
+CHILD_G(){
   strace -p $1 -o scdebug/$1/trace_$uuidd.txt /dev/null
 }
 
-funtion_G(){ #debe funcionar, no está comprobado
+G(){ 
 
   lista_g=$(ps | grep traced_ | tr -s ' ' | cut -d ' ' -f2 | tr -s '\n' ' ')
-  #echo $lista_g
 
   for i in $lista_g; do
     CHECK $i
     uuid=$(uuidgen)
-    #echo "uidd es $uuid"
-    llamada $i &
+    CHILD_G $i &
     sleep 1
     kill -SIGCONT $i
   done
 
 }
 
+# Proceso hijo que se llama en la función GC, para así poder ejecutar el comando strace en segundo plano.
+CHILD_GC(){
+  TABLE=$(strace -p $1 -c -U name,max-time,total-time,calls -S max-time 2>&1)
+  echo "$TABLE"
 
-llamada2(){
-  #echo "llamada $1"
-  #echo "strace -p $1 -c -U | tee -a scdebug/$1/trace_$uuid.txt"
-  
-  tabla=$(strace -p $1 -c -U name,max-time,total-time,calls -S max-time 2>&1)
-  echo "$tabla"
-  # pillar la terecra fila de la tabla
   echo "-------------------------"
-  echo $(echo "$tabla" | head -n 4 | tail -n 1)
-  #echo "strace -p $1 -c -U | tee -a scdebug/$1/trace_$uuid.txt | tail -n 3 | head -n 1"
+  echo $(echo "$TABLE" | head -n 4 | tail -n 1)
   
 }
 
-funtion_GC(){ #debe funcionar, no está comprobado
+GC(){
 
   lista_g=$(ps | grep traced_ | tr -s ' ' | cut -d ' ' -f2 | tr -s '\n' ' ')
-  #echo $lista_g
 
   for i in $lista_g; do
-    #echo ${TEXT_GREEN} "Proceso $i" ${TEXT_RESET}
     CHECK $i
     uuid=$(uuidgen)
-    #echo "${TEXT_GREEN}uidd es $uuid ${TEXT_RESET}"
     echo "${TEXT_GREEN}Proceso $i "
-    llamada2 $i &
+    CHILD_GC $i &
     echo "${TEXT_RESET}"
-    echo "$tabla"
+    echo "$TABLE"
     sleep 1
     kill -SIGCONT $i 
   done
 
 }
 
-llamada3(){
-
-  #echo "llamada $1"
-  #echo "strace -p $1 -c -U | tee -a scdebug/$1/trace_$uuid.txt"
+# Proceso hijo que se llama en la función GE, para así poder ejecutar el comando strace en segundo plano.
+CHILD_GE(){
   
-  tabla=$(strace -p $1 -c -U name,max-time,total-time,calls,errors -S errors 2>&1)
-  echo "$tabla"
-  # pillar la terecra fila de la tabla
+  TABLE=$(strace -p $1 -c -U name,max-time,total-time,calls,errors -S errors 2>&1)
+  echo "$TABLE"
+
   echo "-------------------------"
-  echo $(echo "$tabla" | head -n 4 | tail -n 1)
-  #echo "strace -p $1 -c -U | tee -a scdebug/$1/trace_$uuid.txt | tail -n 3 | head -n 1"
+  echo $(echo "$TABLE" | head -n 4 | tail -n 1)
   
 }
 
-funtion_GE(){
+GE(){
   
   lista_g=$(ps | grep traced_ | tr -s ' ' | cut -d ' ' -f2 | tr -s '\n' ' ')
 
@@ -284,9 +256,9 @@ funtion_GE(){
     CHECK $i
     uuid=$(uuidgen)
     echo "${TEXT_GREEN}Proceso $i "
-    llamada3 $i &
+    CHILD_GE $i &
     echo "${TEXT_RESET}"
-    echo "$tabla"
+    echo "$TABLE"
     sleep 1
     kill -SIGCONT $i 
   done
@@ -295,7 +267,7 @@ funtion_GE(){
 # En el caso de que no se pase ningún argumento, se muestra el menú de ayuda.
 if [ $# -eq 0 ]; then
   echo "Debe añadir al menos un argumento."
-  usage
+  USAGE
   exit 1
 fi
 
@@ -303,7 +275,7 @@ fi
 while [ "$1" != "" ]; do
     case $1 in
         -h )           
-            usage
+            USAGE
             exit
             ;;         
         -sto )   
@@ -313,7 +285,7 @@ while [ "$1" != "" ]; do
         -nattch )  
           if [ "$2" == "" ]; then
           echo "Se esperaban argumentos para -nattch ( progtoattach1 ... ))"
-            usage
+            USAGE
             exit 1
           fi
           while [ "$2" != "-h" ] && [ "$2" != "prog" ] && [ "$2" != "-sto" ] && [ "$2" != "" ] && [ "$2" != "-pattch" ] && [ "$2" != "-k" ]; do
@@ -328,7 +300,7 @@ while [ "$1" != "" ]; do
         -pattch )  
           if [ "$2" == "" ]; then
             echo "Se esperaban argumentos para -pattch ( pid1 ... ))"
-            usage
+            USAGE
             exit 1
           fi
           while [ "$2" != "-h" ] && [ "$2" != "prog" ] && [ "$2" != "-sto" ] && [ "$2" != "" ] && [ "$2" != "-nattch" ] && [ "$2" != "-k" ]; do
@@ -337,13 +309,9 @@ while [ "$1" != "" ]; do
           done
           ;;
         -v )
-            # if [ "$3" != "" ]; then
-            #   echo "No se esperaban argumentos extra para -v"
-            #   exit 1
-            # fi
           if [ "$2" == "" ]; then
             echo "Se esperaban argumentos para -v ( prog1 ... ))"
-            usage
+            USAGE
             exit 1
           fi
           while [ "$2" != "-h" ] && [ "$2" != "prog" ] && [ "$2" != "-sto" ] &&  [ "$2" != "" ] ; do
@@ -355,6 +323,7 @@ while [ "$1" != "" ]; do
         -vall )
             if [ "$2" == "" ] ; then
               echo "Se esperaban argumentos para -vall"
+              USAGE
               exit 1
             fi
           while [ "$2" != "-h" ] && [ "$2" != "prog" ] && [ "$2" != "-sto" ] &&  [ "$2" != "" ] ; do
@@ -366,20 +335,20 @@ while [ "$1" != "" ]; do
         -S )  
           if [ "$2" == "" ]; then
             echo "Se esperaba un argumento para -S ( prog1 [arg1 ...] ))"
-            echo "scdebug [-h] [-k] -S commName prog [arg...]"
+            USAGE2
             exit 1
           fi
             STOP "$2"
             shift
           ;;
         -g )
-          g_option=true
+          IS_G=true
           ;;
         -gc )
-          gc_option=true
+          IS_GC=true
           ;;
         -ge )
-          ge_option=true
+          IS_GE=true
           ;;
 
         * ) if [ "$READLIST" -ne 1 -a "$READPROG" -ne 2 ]; then
@@ -389,7 +358,7 @@ while [ "$1" != "" ]; do
                 lista+="$1 "
             else
                 echo "Argumento no reconocido: $1"
-                usage
+                USAGE
                 exit 1
             fi
           ;;             
@@ -397,26 +366,29 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [[ $g_option == true && ($gc_option == true || $ge_option == true) ]] ||
-   [[ $gc_option == true && ($g_option == true || $ge_option == true) ]] ||
-   [[ $ge_option == true && ($g_option == true || $gc_option == true) ]]; then
-  echo "Debes especificar solo una de las opciones -g, -gc o -ge"
-  usage
+if [[ $IS_G == true && ($IS_GC == true || $IS_GE == true) ]] ||
+   [[ $IS_GC == true && ($IS_G == true || $IS_GE == true) ]] ||
+   [[ $IS_GE == true && ($IS_G == true || $IS_GC == true) ]]; then
+  echo "Debes especificar sólo una de las opciones -g, -gc o -ge."
+  USAGE
   exit 1
 fi
 
-if [ $g_option == true ]; then
+if [ $IS_G == true ]; then
   echo "Se ha seleccionado la opción -g."
-  funtion_G 
-elif [ $gc_option == true ]; then
+  G 
+elif [ $IS_GC == true ]; then
   echo "Se ha seleccionado la opción -gc."
-  funtion_GC
-elif [ $ge_option == true ]; then
+  GC
+elif [ $IS_GE == true ]; then
   echo "Se ha seleccionado la opción -ge."
-  funtion_GE
+  GE
 fi
 
 if [ -n "$listaProg" ]; then
   echo "Lista de programa es $listaProg"
   programa $listaProg
+else
+  echo "No se ha especificado ningún programa."
+  exit 1
 fi
